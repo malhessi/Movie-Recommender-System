@@ -1,0 +1,591 @@
+---
+title: "Movies Recommender System - based on Movielens dataset"
+author: "Mohammed Alhessi"
+date: "12/29/2021"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    fig_caption: true
+    df_print: kable
+    citation_package: natbib
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    theme: cerulean
+    fig_caption: true
+    df_print: kable
+mainfont: Arial
+fontsize: 13pt
+sansfont: Verdana
+bibliography: "bibliography.bib"
+biblio-style: "apalike"
+link-citations: true
+linkcolor: blue
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 6, fig.height = 4)
+```
+  
+```{r install and import libraries, message=FALSE, warning=FALSE, include=FALSE}
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(recosystem)) install.packages("recosystem", repos = "http://cran.us.r-project.org")
+if(!require(recommenderlab)) install.packages("recommenderlab", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(data.table)
+library(recosystem)
+library(recommenderlab)
+
+# Set the target RMSE
+target <- 0.86490
+
+# Set Significant Digits Option
+options(pillar.sigfigs=6)
+```
+  
+# Introduction {#introduction}
+
+This report presents the whole cycle of building Movie Recommender System based on Movielens dataset. It outlines the data cleaning, processing, analysis, and modeling steps as well as results and conclusion.
+  
+The report is part of the capstone project of HarvardX's Data Science Professional Certificate1 program. In this project, we aimed to build Movie recommendation System through different models to reach the target Root Mean Square Error (RMSE) of 0.86490 or less.
+  
+The report is structured into 4 chapters: (1) [Chapter 1](#Introduction) that introduces the problem at our hand, the dataset, and the accuracy metrics for evaluation, (2) [Chapter 2](#Methods%20and%20Analysis) that discusses the methods used to solve the problem and to reach target RMSE less than 0.86490. This chapter also explores the dataset through descriptive statistics and data visualization so that we could get more insights from the data, (3) [Chapter 3](#Results) presents and discusses the results of different models and their performance, and finally (4) [Chapter 4](#Conclusion) the concludes the project and gives recommendations for future work.
+  
+## Recommendation Systems
+  
+One of the key tools that is used in modern marketing is understanding the customer behavior, special needs and taste, and what he likes and what he dislikes. Modern customers are inundated with huge number of products that is offered by online retailers. Matching the special needs and taste of customers to the appropriate products is a key factor in enhancing the user/customer satisfaction and loyalty.
+  
+Therefore, more retailers have become interested in recommender systems, which analyze patterns of user interest in products to provide personalized recommendations that suit a user's taste. Because good personalized recommendations can add another dimension to the user experience, e-commerce leaders like Amazon.com and Netflix have made recommender systems a salient part of their websites[@1].
+  
+In pursuit to improve its movie recommender system, Netflix announced a contest in 2006. The first person/team who can build a new algorithm with performance that exceeds Netflix algorithms by 10%, will win US\$ 1 million prize. The performance is measured in terms of RMSE metric; so any decrease by 10% or more in the reference RMSE (recorded by Netflix algorithm), will be considered as winner. In 2009, the grand prize of US US\$ 1,000,000 was given to the BellKor's Pragmatic Chaos team which bested Netflix's own algorithm for predicting ratings by 10.06%[@2].
+  
+The winner team employed the matrix factorization using Single Value Decomposition besides regularization technique to improve the performance. For more information on Matrix Factorization within the context of recommender systems, read [this article](https://citeseer.ist.psu.edu/viewdoc/download;jsessionid=3DFA18602425365D101D5183C662FB8F?doi=10.1.1.147.8295&rep=rep1&type=pdf).  
+  
+## MovieLens Dataset
+  
+In this project, we used Movielens dataset to achieve target RMSE of 0.86490 or less. The Netflix data is not publicly available, but the GroupLens research lab generated their own database with millions of ratings for thousands of movies rated by thousands of users. GroupLens Research has collected and made available rating data sets from the [MovieLens web site](https://movielens.org). The data sets were collected over various periods of time, depending on the size of the set.
+  
+MovieLens 25M Dataset is Stable benchmark dataset with 25 million ratings on 62,000 movies by 162,000 users[^1]. The latest dataset is 27M Dataset with 27 million ratings on 58,000 movies by 280,000 users^[https://grouplens.org/datasets/movielens/].
+  
+In this project, MovieLens 10M Dataset is used. It is a subset with 10 million ratings on 10,000 movies by 72,000 users. We will explore this dataset in the subsequent sections.
+  
+## What is RMSE? and How is calculated?
+
+RMSE stands for Root Mean Square Error. It is a mteric that is used in evaluating performance of different models. The smaller RMSE is, the better performance is the model.  
+RMSE measures the error/deviance of the predicted rating from the true one and is calculated as follows:  
+1. Take the difference between the true rating and predicted one,  
+2. square the difference,  
+3. take the average of squared differences for all ratings, and  
+4. Then finally take the square root of the average.  
+or mathematically, it can be expressed by the following formula:  
+$$
+RMSE = \sqrt{\frac{1}{N}\sum_{u,i}(\hat{y}_{u,i}-y_{u,i})^2}
+$$
+  
+where $N$ is the number of ratings, $y_{u,i}$ is the rating of movie $i$ by user $u$ and $\hat{y}_{u,i}$ is the prediction of movie $i$ by user $u$.  
+  
+The goal of this project is to create a recommendation system with target RMSE of 0.8649 or less.
+  
+## General Workflow
+  
+The workflow we used is, in general, the same as for any data modeling process.
+  
+**The first step** is preparing the dataset by downloading the data files , read and store them in R data frame, then split the dataset into two datasets: the training dataset (90%) and the validation one (10%).
+
+**The second step** was exploring the data through descriptive statistics and visualization to understand the data patterns, and to check if any cleaning process is needed.
+  
+**The third step** is cleaning the data and preparing it for modeling.
+  
+**The fourth step** is building the recommendation model by starting with the simplest model and iterate until you find the best model that achieve the target RMSE of 0.8649 or less.
+  
+**Finally**, communicate the results through tables, charts, and final report.
+  
+# Methods and Analysis
+  
+## Download and Prepare the data
+  
+In this section, we download the data and prepare it for next steps. After downloading the data, the dataset is split into two datasets: (1) Traing dataset with 90% of the original data, called `edx`, and (2) Validation dataset with 10% of the orignal dataset, called `validation`. `edx` dataset is used mainly for training the models, and it is further split into train (90% of `edx`) and test datasets (10% of `edx`) for parameters tuning, if necessary. `validation` dataset will be used for selecting the final model, and will be used for evaluation purposes and calculating final RMSE.
+  
+```{r Prepare Data, message=FALSE, warning=FALSE, include=TRUE}
+##########################################################
+# Create edx set, validation set (final hold-out test set)
+##########################################################
+
+# Note: this process could take a couple of minutes
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                 col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+
+# if using R 3.6 or earlier:
+# movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+#                                            title = as.character(title),
+#                                            genres = as.character(genres))
+# if using R 4.0 or later:
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+validation <- temp %>% 
+  semi_join(edx, by = "movieId") %>%
+  semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+```
+  
+  
+## Explore and Clean the data
+
+In this section, we will explore the data in more detail to understand the hidden patterns. Visualization and descriptive statistics will help in understanding the interaction between users and movies.
+
+### Explore the distribution of the ratings
+
+The total number of ratings in the `edx` data is `r nrow(edx)` ratings. Here is a sample of 10 ratings:
+
+```{r sample of the data, message=FALSE, warning=FALSE, include=TRUE}
+knitr::kable(sample_n(edx,10,replace=TRUE ))
+```
+
+As it shown in the table, the `edx` dataset has `r ncol(edx)` columns with names: (`r colnames (edx)`).
+
+A summary of the `edx` dataset is presented below:
+
+```{r summary of edx, message=FALSE, warning=FALSE, include=TRUE}
+summary(edx)
+```
+
+To visualize the distribution of the ratings, a bar chart is created as shown below:
+
+```{r Distribution of the ratings, message=FALSE, warning=FALSE, include=TRUE, fig.width=6, fig.height=4, fig.cap="Distribution of ratings"}
+edx %>% ggplot(aes(x=rating)) +
+  geom_bar(fill="#006bbd") +
+  geom_text(aes(label=..count..), stat="count", color="white", vjust=1.5) +
+  geom_vline(xintercept =mean(edx$rating), color="red" ) +
+  geom_vline(xintercept =median(edx$rating), color="blue")
+```
+
+The bar chart shows that nearly half of the ratings have scores 4 or larger.
+
+let's have a look at the number of unique users and movies in the `edx` dataset.
+
+```{r No. users and movies, message=FALSE, warning=FALSE, include=TRUE}
+# Number of users
+nusers <- edx %>% select(userId) %>% n_distinct()
+
+# Number of movies
+nmovies <- edx %>% select(movieId) %>% n_distinct()
+
+```
+
+A total of `r nusers` users rated a total of `r nmovies` movies. If every user rates every movie, then the total number of ratings should be `r nusers*nmovies` ratings, which is much larger than the actual ratings (`r nrow(edx)`. That means some users didn't rate some movies. If we rearranged the ratings in a matrix form where the rows represent the users and the columns represent the movies, then we will end up with very sparse matrix that have many missing values. Predicting the missing values is the goal of any recommender system.
+
+```{r Sparse Matrix, message=FALSE, warning=FALSE, include=TRUE}
+
+# Take a sample 100 distinct users with unique ids
+sample_users <- sample(unique(edx$userId), 100)
+
+# Create and plot a matrix of 100 different users who rated a sample of
+# 100 movies. This is to visualize part of the large sparse matrix.
+x<-edx %>% filter(userId %in% sample_users) %>%
+  select(userId, movieId, rating) %>%
+  spread(movieId, rating) %>%
+  select(sample(ncol(.), 100)) %>% 
+  as.matrix() %>% t(.) %>%
+  image(1:100, 1:100,. , xlab="Movies", ylab="Users")
+
+```
+
+As you see, the matrix has a large number of white cells, which means missing values. For example, user 10 has rated only few movies of the sampled list of 100 movies.
+
+### Explore the distribution/ variability of the users
+
+It is good to understand the variability of the users in terms of ratings. For each user, the total number of ratings of all movies is calculated and then a histogram is built, which will convey the variability among the users.
+
+```{r variability of users, message=FALSE, warning=FALSE, include=TRUE}
+edx %>%
+  group_by(userId) %>%
+  summarize(n=n()) %>%
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black") + 
+  scale_x_log10() +
+  ggtitle("Users")
+```
+
+It is clear that users are variable in the total number of ratings made by them. It is found that there are few users who have 10 or less ratings, and on the other side there are also few users who have 1000 or more ratings. This shows that there are variability among users which should be considered in the modeling process. This variability refers to "Users Effect".
+
+### Explore the distribution of the movies
+
+It is also good to understand the variability among the movies in terms of ratings. In a similar way, the total number of ratings of all users for each movie is calculated, then a histogram is created to visualize the variability among the movies.
+
+```{r variability of movies, message=FALSE, warning=FALSE, include=TRUE}
+edx %>%
+  group_by(movieId) %>%
+  summarize(n=n()) %>%
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black") + 
+  scale_x_log10() +
+  ggtitle("Movies")
+```
+
+Again, the movies are variable in terms of the total number of ratings for each movie. It also is found that there are few movies who are rated by few users (10 or less ratings), and on the other side there are also few movies who are rated by large number of users (1000 or more ratings). This shows that there are variability among movies which should be considered in the modeling process. This variability refers to "Movies Effect".
+
+## Building the Model
+
+In this section, we seek to find appropriate recommendation model which can achieve a target RMSE less than `r target`.
+
+Let's first create a function that calculates RMSE. This make things easier.
+
+```{r RMSE Function, message=FALSE, warning=FALSE, include=TRUE}
+# RMSE Function
+RMSE <- function(true_ratings, predicted_ratings){
+  sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+```
+
+### Partition the dataset `edx`
+
+Since we need to tune the parameters in some models, it is good practice to partition the `edx` dataset into training (75%) and testing (25%) subsets. by doing so, we,therefore, have three subsets:\
+1) Training subset(`train_edx`): this subset will be used in training the models.\
+2) Testing subset(`test_edx`): this subset will be used in parameters tuning, if any.\
+3) Validation subset(`validation`): this subset will be used to select the final model that achieve the target RMSE.
+
+```{r Partition the Model, message=FALSE, warning=FALSE, include=TRUE}
+# Partition EDX Dataset into Training and Test Datasets
+set.seed(1985)
+test_indices <- createDataPartition(edx$rating, times = 1, p=0.25, list=FALSE)
+train_edx <- edx[-test_indices,]
+test_edx <- edx[test_indices,]
+
+#  Remove the users and movies that don't appear in both test and training datasets.
+test_edx <- test_edx %>% semi_join(train_edx,by="movieId") %>%
+  semi_join(train_edx, by="userId")
+```
+
+### Average Model
+
+This is a trivial model where we predict the same rating for all movies regardless of the users. This model can be mathematically expressed as:
+
+$$
+Y_{u,i} = \mu + \epsilon_{u,i}
+$$
+
+$Y_{u,i}$: the rating made by user $u$ for movie $i$.  
+$\mu$: true mean of ratings.  
+$\epsilon_{u,i}$: Gaussian residuals with mean 0.  
+
+The least square solution of this model is the average of ratings $\mu$.  
+
+```{r Average Model, message=FALSE, warning=FALSE, include=TRUE}
+
+#============= First Model = Constant Mean =============
+# Y(u,i) = Mu + E(u,i) u: user, i: movie
+mu_hat <- mean(edx$rating) # mu_hat=3.5125
+
+# Calculate RMSE
+rmse_muhat <- RMSE(validation$rating, mu_hat) #RMSE=1.06120
+
+# Store the result
+accuracy_results <- tibble(Model = "Average_Model", RMSE = rmse_muhat)
+
+```
+
+It is found that the average of ratings is `r mu_hat` with RMSE of `r rmse_muhat`.
+
+### Movie Effect Model
+
+We have previously seen that the number of ratings are variable from movie to movie. Some movies are rated more than others. There are very few movies that rated once, while ther other few that have large ratings. This variability should be considered in the model. This is called "Movie Effect". It can be mathematically expressed as:
+
+$$
+Y_{u,i} = \mu + b_{i} + \epsilon_{u,i}
+$$
+
+$Y_{u,i}$: the rating made by user $u$ for movie $i$.  
+$\mu$: true mean of ratings.  
+$b_{i}$: Movie Effect; average of all ratings made by all users for movie $i$.  
+$\epsilon_{u,i}$: Gaussian residuals with mean 0.  
+
+The approximate solution of this model is  $\hat{b_{i}} = Y_{u,i} - \hat{\mu}$.  
+
+```{r Movie Effects Model, message=FALSE, warning=FALSE, include=TRUE}
+
+# ============= Second Model = Movie Effect  =============
+# Y(u,i) = Mu + b(i) + E(u,i) u:user, i:movie, b:movie effect
+# b(i) = Y(u,i) - Mu
+movie_effect <- edx %>% group_by(movieId) %>% summarize(bi = mean(rating-mu_hat))
+
+# Calculate the predicted ratings after considering the movie effect.
+predicted_ratings_mv <- validation %>%
+  left_join(movie_effect, by="movieId") %>%
+  mutate(pred_mv = mu_hat + bi)
+
+# Calculate RMSE
+rmse_bi <- RMSE(validation$rating, predicted_ratings_mv$pred_mv)
+
+# Store the result
+accuracy_results <- bind_rows(accuracy_results,
+                              tibble(Model = "Movie_Effect_Model", RMSE = rmse_bi))
+
+```
+
+After running the model, It is found that the achieved RMSE is `r rmse_bi`. It is still so far away from the target RMSE (`r target`).
+
+### Movie and User Effects Model
+
+We have also previously seen that the number of ratings are variable from user to user. Some users rated movies more than others, While there are few users who rated very few movies, there are also other few who rated alot of movies. This variability should be considered in the model. This is called "User Effect". It can be mathematically expressed as:
+
+$$
+Y_{u,i} = \mu + b_{i} + b_{u} + \epsilon_{u,i}
+$$
+
+$Y_{u,i}$: the rating made by user $u$ for movie $i$.  
+$\mu$: true mean of ratings.  
+$b_{i}$: Movie Effect; average of all ratings made by all users for movie $i$.  
+$b_{u}$: User Effect; average of all ratings made by user $u$ for all movies.  
+$\epsilon_{u,i}$: Gaussian residuals with mean 0.  
+
+The approximate solution of this model is $\hat{b_{u}} = Y_{u,i} - \hat{\mu} - \hat{b_{i}}$.
+  
+```{r User Effects Model, message=FALSE, warning=FALSE, include=TRUE}
+
+# =============  Third Model = User Effect ============= 
+# Y(u,i) = Mu + b(i) + b(u) + E(u,i) u:user, i:movie, b:movie effect
+# b(u) = Y(u,i) - Mu - b(i)
+user_effect <- edx %>%
+  left_join(movie_effect, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(bu = mean(rating-mu_hat-bi))
+
+predicted_ratings_ur <- validation %>%
+  left_join(movie_effect, by="movieId") %>%
+  left_join(user_effect, by="userId") %>%
+  mutate(pred_ur = mu_hat + bi + bu)
+
+# Calculate RMSE
+rmse_bu <- RMSE(validation$rating, predicted_ratings_ur$pred_ur)
+
+# Store the result
+accuracy_results <- bind_rows(accuracy_results,
+                              tibble(Model = "User_Effect_Model", RMSE = rmse_bu))
+```
+
+After taking the effect of users variability in the model, RMSE is decreased to reach `r rmse_bu`. This is a high improvement towards the target.
+
+### Regularized Movie and User Effects Model
+
+We have learned from statistics that as we have larger sample size, then the estimated parameters are more reliable and have less uncertainty. As will see now, we will find that $b_{i}$ and $b_{u}$ are estimated from one rating only, which introduced high uncertainty and overfitting. To understand how?, please refer to [This section](https://rafalab.github.io/dsbook/large-datasets.html#regularization) form "Introduction to Data Science" Book.
+
+The regularized movie and users effects model can be mathematically expressed as follows:
+
+$$
+Y_{u,i} = \mu + b_{i} + b_{u} + \epsilon_{u,i}
+$$
+
+Minimizing the following loss function: 
+
+$$
+\sum_{u,i}( y_{u,i} - \mu - b_{i} - b_{u} )^{2} + \lambda (\sum_{i}b_{i}^2\ + \sum_{u}b_{u}^2)^{2}
+$$
+  
+$Y_{u,i}$: the rating made by user $u$ for movie $i$.  
+$\mu$: true mean of ratings.  
+$b_{i}$: Movie Effect; average of all ratings made by all users for movie $i$.  
+$b_{u}$: User Effect; average of all ratings made by user $u$ for all movies.  
+$\epsilon_{u,i}$: Gaussian residuals with mean 0.  
+$\lambda$: Regularization term/penalty term.  
+  
+The solution to the previous model is given by the following formulas:  
+1) First, estimate the regularized movie effect from the following formula:  
+  
+$$
+\hat{b_{i}}(\lambda) = \frac{1}{\lambda+n_{i}}\sum_{u=1}^{n_{i}}(Y_{u,i}-\hat{\mu})
+$$
+  
+2) Second, estimate the regularized user effect from the following formula:
+  
+$$
+\hat{b_{u}}(\lambda) = \frac{1}{\lambda+n_{u}}\sum_{i=1}^{n_{u}}(Y_{u,i}-\hat{\mu}-\hat{b_{i}})
+$$
+
+Then the predicted rating can be calculated from the following formula:
+  
+$$
+\hat{y}_{u,i} = \hat{\mu} + \hat{b_{i}} + \hat{b_{u} }
+$$
+  
+It is worth mentioning that $\lambda$ can be tuned so that the optimal $\lambda$ gives the lowest RMSE. So, we will use the testing data `test_edx` to for parameter tuning, and validation dataset `validation` for calculating RMSE of the tuned model.  
+  
+
+```{r Regularized Movie and User Effects Model, message=FALSE, warning=FALSE, include=TRUE}
+
+# =====  Fourth Model = Regularized Movie and User Effects =====
+
+lambdas <- seq(0, 10, 0.25)
+
+rmses <- sapply(lambdas, function(lambda){
+
+  mu_hat <- mean(train_edx$rating)
+  
+  b_i_hat <- train_edx %>% 
+    group_by(movieId) %>%
+    summarize(b_i_hat = sum(rating - mu_hat)/(n()+lambda))
+  
+  b_u_hat <- train_edx %>% 
+    left_join(b_i_hat, by="movieId") %>%
+    group_by(userId) %>%
+    summarize(b_u_hat = sum(rating - b_i_hat - mu_hat)/(n()+lambda))
+
+  predicted_ratings <- 
+    test_edx %>% 
+    left_join(b_i_hat, by = "movieId") %>%
+    left_join(b_u_hat, by = "userId") %>%
+    mutate(pred_rate = mu_hat + b_i_hat + b_u_hat) %>%
+    pull(pred_rate)
+  
+    return(RMSE(predicted_ratings, test_edx$rating))
+})
+
+qplot(lambdas, rmses)  
+
+# Selected Lambda
+sel_lambda <- lambdas[which.min(rmses)]
+sel_lambda
+
+# Predict the ratings using the selected Lambda
+mu_hat <- mean(edx$rating)
+  
+b_i_hat <- edx %>% 
+  group_by(movieId) %>%
+  summarize(b_i_hat = sum(rating - mu_hat)/(n()+sel_lambda))
+
+b_u_hat <- edx %>% 
+  left_join(b_i_hat, by="movieId") %>%
+  group_by(userId) %>%
+  summarize(b_u_hat = sum(rating - b_i_hat - mu_hat)/(n()+sel_lambda))
+
+predicted_ratings <- 
+  validation %>% 
+  left_join(b_i_hat, by = "movieId") %>%
+  left_join(b_u_hat, by = "userId") %>%
+  mutate(pred_rate = mu_hat + b_i_hat + b_u_hat)
+
+# Calculate RMSE
+rmse_reg <- RMSE(validation$rating, predicted_ratings$pred_rate)
+
+# Store the result
+accuracy_results <- bind_rows(
+  accuracy_results,
+  tibble(Model = "Regularized Movie_and_User_Effect_Model", RMSE = rmse_reg)
+  )
+
+```
+
+After running the regularized model, RMSE is decreased to reach `r rmse_reg`, which is less than the target RMSE (`r target`)
+  
+
+### Regularized Model with Matrix Factorization
+
+It is now the time to show a very effective method in building a recommendation system; it is the matrix factorization method.  
+
+Matrix factorization tries to factorize the users-movies matrix $M_{m\times n}$ into two matrices $P_{m\times f}$ and $Q_{f\times n}$.  
+This factorization process tries to uncover the hidden patters or what is called latent features in the behavior of users while they are rating the movies. It tries to find similar users and similar movies based on the latent features. This similarity could be based on the movie genre or whatever feature. It is not explicit in the rating matrix. So, one of the parameters that should be tuned is the number of latent features. As the features increase more patterns are revealed and thus more accurate predictions can be obtained.  
+  
+Detailed information can be found in [This section](https://rafalab.github.io/dsbook/large-datasets.html#matrix-factorization) form "Introduction to Data Science" Book.  
+
+In this project, we made use of recosystem package, which is an R wrapper of the LIBMF library developed by Yu-Chin Juan, Wei-Sheng Chin, Yong Zhuang, Bo-Wen Yuan, Meng-Yuan Yang, and Chih-Jen Lin (https://www.csie.ntu.edu.tw/~cjlin/libmf/), an open source library for recommender system using parallel marix factorization[@recosys2021].  
+
+#### MAtrix Factorization using `recosystem` package
+
+```{r Matrix Factorization Model, message=FALSE, warning=FALSE, include=TRUE}
+set.seed(19850, sample.kind = "Rounding")
+
+# Convert 'edx' and 'validation' subsets to recosystem input objects
+# edx_reco1 <-  with(edx, data_memory(user_index = userId, 
+#                                    item_index = movieId, 
+#                                    rating = rating))
+edx_reco <-  with(edx, data_memory(user_index = userId, 
+                                   item_index = movieId, 
+                                   rating = rating))
+
+validation_reco  <- with(validation, data_memory(user_index = userId, 
+                                                  item_index = movieId, 
+                                                  rating = rating))
+
+# Create the model object
+reco_model <-  recosystem::Reco()
+
+# Tune the parameters
+opts <-  reco_model$tune(edx_reco, opts = list(dim = c(10, 20,30), 
+                                     lrate = c(0.1, 0.2),
+                                     costp_l2 = c(0.01, 0.1), 
+                                     costq_l2 = c(0.01, 0.1),
+                                     nthread  = 4, niter = 10))
+
+# Train the model
+reco_model$train(edx_reco, opts = c(opts$min, nthread = 4, niter = 20))
+
+# Calculate the prediction
+predicted_ratings_mf <-  reco_model$predict(validation_reco, out_memory())
+
+# Calculate RMSE
+rmse_mf <- RMSE(validation$rating, predicted_ratings_mf)
+
+# Store the result
+accuracy_results <- bind_rows(
+  accuracy_results,
+  tibble(Model = "Matrix Factorization Model", RMSE = rmse_mf)
+  )
+
+```
+
+Substantial decrease in RMSE was observed after running the matrix factorization model.  RMSE of `r rmse_mf` was obtained, which is below the target RMSE (`r target`).  
+
+
+# Results
+
+Let's view the final table of all models with their corresponding RMSEs as below:
+```{r Table of Models, message=FALSE, warning=FALSE, include=TRUE}
+knitr::kable(accuracy_results,
+             caption="The implemented Models with thier accuracies.")
+```
+  
+It is clear that the matrix factorization has made substantial progress with achieved RMSE of `r rmse_mf`. Then the regularized model comes in the second place in terms of low RMSE of (`r rmse_reg`).  
+
+# Conclusion and Recommendations
+
+The results prove the importance of Regularization and Matrix Factorization in building efficient recommendation systems. There are several implementations of the two methods that worth to be tested in future works. For example, `recommenderlab` package have several methods and models to build a recommendation system.
+
+Parameters tuning deserve more effort to try different parameters and test how the accuracy change.
+
+# References {.unnumbered}
